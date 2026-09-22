@@ -110,3 +110,51 @@ st.text_input(
 )
 
 st.caption(f"분석 대상: {len(df):,}편")
+
+
+# =========================================================
+# 그래프 2. 장르별 영화 총 관객 트리맵
+# =========================================================
+st.subheader("2. 장르별 영화 총 관객 트리맵")
+
+# 총 관객 수를 숫자로 변환하고, 영화명/장르가 없는 행은 제외한다.
+treemap_df = df.copy()
+treemap_df["total_audi"] = pd.to_numeric(
+    treemap_df["total_audi"], errors="coerce"
+)
+treemap_df = treemap_df.dropna(
+    subset=["genre_first", "movieNm", "total_audi"]
+)
+treemap_df = treemap_df[treemap_df["total_audi"] >= 0]
+
+fig2 = px.treemap(
+    treemap_df,
+    path=["genre_first", "movieNm"],
+    values="total_audi",
+)
+
+# 영화 칸에 마우스를 올렸을 때 영화명과 총 관객이 보이도록 설정
+fig2.update_traces(
+    hovertemplate=(
+        "<b>%{label}</b><br>"
+        "총 관객: %{value:,.0f}명"
+        "<extra></extra>"
+    ),
+    root_color="lightgray",
+)
+
+fig2.update_layout(
+    title="장르 안에 들어 있는 영화별 총 관객",
+    margin=dict(t=70, b=20, l=20, r=20),
+    height=700,
+)
+
+st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown("---")
+st.markdown("### 이 그래프로 알 수 있는 것")
+st.text_input(
+    "한 문장으로 작성해 보세요.",
+    placeholder="예: 어떤 장르에 관객 수가 많은 영화가 많이 포함되어 있는지 알 수 있다.",
+    key="graph2_observation",
+)
