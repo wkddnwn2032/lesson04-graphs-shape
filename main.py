@@ -167,84 +167,154 @@ st.subheader("3. 총 관객 수 분포")
 
 hist_df = df.copy()
 hist_df["total_audi"] = pd.to_numeric(hist_df["total_audi"], errors="coerce")
-hist_df = hist_df.dropna(subset=["total_audi", "movieNm"])
+hist_df = hist_df.dropna(subset=["total_audi", "movieNm"]).copy()
 hist_df = hist_df[hist_df["total_audi"] >= 0].copy()
 
-if len(hist_df) > 0:
-    max_audi = hist_df["total_audi"].max()
+if not hist_df.empty:
+    max_audi = int(hist_df["total_audi"].max())
 
-    # 전체 범위를 약 10개 구간으로 나누어 분포를 보기 쉽게 한다.
-    bin_width = max(1_000_000, int(((max_audi / 10) + 999_999) // 1_000_000) * 1_000_000)
-    bin_start = 0
-    bin_end = int(((max_audi // bin_width) + 1) * bin_width)
+    # 최대 관객 수를 기준으로 1천만 명 단위의 구간을 만든다.
+    # 너무 많은 구간이 생기지 않도록 최소 100만 명 단위를 사용한다.
+    raw_width = max_audi / 10 if max_audi > 0 else 1_000_000
+    unit = 1_000_000
+    bin_width = max(unit, int((raw_width + unit - 1) // unit) * unit)
+    bin_end = max(bin_width, ((max_audi // bin_width) + 1) * bin_width)
 
-    fig3 = px.histogram(
-        hist_df,
-        x="total_audi",
-        nbins=max(1, int(bin_end / bin_width)),
-        labels={"total_audi": "총 관객 수", "count": "영화 편수"},
+    # 그래프에 사용할 구간을 직접 만들어서 Plotly histogram의 자동 구간 문제를 피한다.
+    edges = list(range(0, bin_end + bin_width, bin_width))
+    hist_df["관객 구간"] = pd.cut(
+        hist_df["total_audi"],
+        bins=edges,
+        right=False,
+        include_lowest=True,
+    )
+
+    distribution = (
+        hist_df["관객 구간"]
+        .value_counts(sort=False)
+        .reset_index()
+    )
+    distribution.columns = ["관객 구간", "영화 편수"]
+    distribution["구간"] = distribution["관객 구간"].apply(
+        lambda x: f"{int(x.left):,}~{int(x.right):,}"
+    )
+
+    fig3 = px.bar(
+        distribution,
+        x="구간",
+        y="영화 편수",
+        labels={"구간": "총 관객 수 구간", "영화 편수": "영화 편수"},
+        text="영화 편수",
     )
 
     fig3.update_traces(
-        xbins=dict(
-            start=bin_start,
-            end=bin_end,
-            size=bin_width,
-        ),
         hovertemplate=(
-            "총 관객 구간: %{x}<br>"
+            "총 관객 구간: %{x}명<br>"
             "영화 편수: %{y}편"
             "<extra></extra>"
         ),
+        textposition="outside",
     )
 
     fig3.update_layout(
         title="영화별 총 관객 수 분포",
-        xaxis_title="총 관객 수(명)",
+        xaxis_title="총 관객 수 구간(명)",
         yaxis_title="영화 편수",
-        xaxis=dict(
-            tickformat=",",
-        ),
-        margin=dict(t=70, b=20, l=20, r=20),
-        height=520,
+        margin=dict(t=70, b=80, l=20, r=20),
+        height=560,
     )
 
     st.plotly_chart(fig3, use_container_width=True)
 
-    # 실제 히스토그램과 같은 구간으로 가장 많은 영화가 몰린 구간을 계산한다.
-    hist_counts, hist_edges = pd.cut(
-        hist_df["total_audi"],
-        bins=list(range(bin_start, bin_end + bin_width, bin_width)),
-        right=False,
-        include_lowest=True,
-    ).value_counts().sort_index(), None
+    # 가장 많은 영화가 몰려 있는 구간
+    busiest_index = distribution["영화 편수"].idxmax()
+    busiest_row = distribution.loc[busiest_index]
+    busiest_count = int(busiest_row["영화 편수"])
+    busiest_label = str(busiest_row["구간"])
 
-    if len(hist_counts) > 0:
-        busiest_bin = hist_counts.idxmax()
-        busiest_count = int(hist_counts.max())
+    # 가장 관객이 많은 영화
+    top_movie = hist_df.loc[hist_df["total_audi"].idxmax()]
+    top_movie_name = str(top_movie["movieNm"])
+    top_movie_audi = int(top_movie["total_audi"])
 
-        # 가장 관객이 많은 영화
-        top_movie = hist_df.loc[hist_df["total_audi"].idxmax()]
-        top_movie_name = str(top_movie["movieNm"])
-        top_movie_audi = int(top_movie["total_audi"])
-
-        lower = int(busiest_bin.left)
-        upper = int(busiest_bin.right)
-
-        st.info(
-            f"📊 가장 많은 영화가 몰려 있는 구간은 "
-            f"**{lower:,}명 이상 ~ {upper:,}명 미만**으로, "
-            f"**{busiest_count}편**의 영화가 이 구간에 있습니다.  \n"
-            f"🏆 가장 관객이 많은 영화는 **{top_movie_name}**으로, "
-            f"총 **{top_movie_audi:,}명**의 관객을 기록했습니다."
-        )
+    st.info(
+        f"📊 가장 많은 영화가 몰려 있는 구간은 "
+        f"**{busiest_label}명**으로, **{busiest_count}편**의 영화가 이 구간에 있습니다.  \n"
+        f"🏆 가장 관객이 많은 영화는 **{top_movie_name}**으로, "
+        f"총 **{top_movie_audi:,}명**의 관객을 기록했습니다."
+    )
 
     st.markdown("---")
     st.markdown("### 이 그래프로 알 수 있는 것")
     st.text_input(
         "한 문장으로 작성해 보세요.",
-        placeholder="예: 영화의 총 관객 수가 특정 구간에 집중되어 있으며, 일부 영화는 매우 많은 관객을 기록한다.",
+        placeholder="예: 영화의 총 관객 수가 어느 구간에 가장 많이 몰려 있는지 알 수 있다.",
         key="graph3_observation",
     )
 else:
     st.warning("총 관객 수 데이터를 확인할 수 없습니다.")
+
+
+# =========================================================
+# 그래프 4. 개봉일 스크린 수와 총 관객의 관계
+# =========================================================
+st.subheader("4. 개봉일 스크린 수와 총 관객의 관계")
+
+scatter_df = df.copy()
+scatter_df["first_scrn"] = pd.to_numeric(
+    scatter_df["first_scrn"], errors="coerce"
+)
+scatter_df["total_audi"] = pd.to_numeric(
+    scatter_df["total_audi"], errors="coerce"
+)
+scatter_df = scatter_df.dropna(
+    subset=["first_scrn", "total_audi", "movieNm", "genre_first"]
+).copy()
+scatter_df = scatter_df[
+    (scatter_df["first_scrn"] >= 0) & (scatter_df["total_audi"] >= 0)
+].copy()
+
+if not scatter_df.empty:
+    fig4 = px.scatter(
+        scatter_df,
+        x="first_scrn",
+        y="total_audi",
+        color="genre_first",
+        hover_name="movieNm",
+        labels={
+            "first_scrn": "개봉일 스크린 수",
+            "total_audi": "총 관객 수",
+            "genre_first": "장르",
+        },
+        title="개봉일 스크린 수와 총 관객 수의 관계",
+    )
+
+    fig4.update_traces(
+        marker=dict(size=9, opacity=0.75),
+        hovertemplate=(
+            "영화명: %{hovertext}<br>"
+            "개봉일 스크린 수: %{x:,.0f}개<br>"
+            "총 관객 수: %{y:,.0f}명"
+            "<extra></extra>"
+        ),
+    )
+
+    fig4.update_layout(
+        xaxis_title="개봉일 스크린 수(개)",
+        yaxis_title="총 관객 수(명)",
+        legend_title_text="장르",
+        margin=dict(t=70, b=60, l=20, r=20),
+        height=650,
+    )
+
+    st.plotly_chart(fig4, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### 이 그래프로 알 수 있는 것")
+    st.text_input(
+        "한 문장으로 작성해 보세요.",
+        placeholder="예: 개봉일 스크린 수가 많을수록 총 관객 수가 많은 경향이 있는지 확인할 수 있다.",
+        key="graph4_observation",
+    )
+else:
+    st.warning("스크린 수와 총 관객 수 데이터를 확인할 수 없습니다.")
