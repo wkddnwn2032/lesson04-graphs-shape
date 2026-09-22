@@ -158,3 +158,93 @@ st.text_input(
     placeholder="예: 어떤 장르에 관객 수가 많은 영화가 많이 포함되어 있는지 알 수 있다.",
     key="graph2_observation",
 )
+
+
+# =========================================================
+# 그래프 3. 총 관객 수 분포
+# =========================================================
+st.subheader("3. 총 관객 수 분포")
+
+hist_df = df.copy()
+hist_df["total_audi"] = pd.to_numeric(hist_df["total_audi"], errors="coerce")
+hist_df = hist_df.dropna(subset=["total_audi", "movieNm"])
+hist_df = hist_df[hist_df["total_audi"] >= 0].copy()
+
+if len(hist_df) > 0:
+    max_audi = hist_df["total_audi"].max()
+
+    # 전체 범위를 약 10개 구간으로 나누어 분포를 보기 쉽게 한다.
+    bin_width = max(1_000_000, int(((max_audi / 10) + 999_999) // 1_000_000) * 1_000_000)
+    bin_start = 0
+    bin_end = int(((max_audi // bin_width) + 1) * bin_width)
+
+    fig3 = px.histogram(
+        hist_df,
+        x="total_audi",
+        nbins=max(1, int(bin_end / bin_width)),
+        labels={"total_audi": "총 관객 수", "count": "영화 편수"},
+    )
+
+    fig3.update_traces(
+        xbins=dict(
+            start=bin_start,
+            end=bin_end,
+            size=bin_width,
+        ),
+        hovertemplate=(
+            "총 관객 구간: %{x}<br>"
+            "영화 편수: %{y}편"
+            "<extra></extra>"
+        ),
+    )
+
+    fig3.update_layout(
+        title="영화별 총 관객 수 분포",
+        xaxis_title="총 관객 수(명)",
+        yaxis_title="영화 편수",
+        xaxis=dict(
+            tickformat=",",
+        ),
+        margin=dict(t=70, b=20, l=20, r=20),
+        height=520,
+    )
+
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # 실제 히스토그램과 같은 구간으로 가장 많은 영화가 몰린 구간을 계산한다.
+    hist_counts, hist_edges = pd.cut(
+        hist_df["total_audi"],
+        bins=list(range(bin_start, bin_end + bin_width, bin_width)),
+        right=False,
+        include_lowest=True,
+    ).value_counts().sort_index(), None
+
+    if len(hist_counts) > 0:
+        busiest_bin = hist_counts.idxmax()
+        busiest_count = int(hist_counts.max())
+
+        # 가장 관객이 많은 영화
+        top_movie = hist_df.loc[hist_df["total_audi"].idxmax()]
+        top_movie_name = str(top_movie["movieNm"])
+        top_movie_audi = int(top_movie["total_audi"])
+
+        lower = int(busiest_bin.left)
+        upper = int(busiest_bin.right)
+
+        st.info(
+            f"📊 가장 많은 영화가 몰려 있는 구간은 "
+            f"**{lower:,}명 이상 ~ {upper:,}명 미만**으로, "
+            f"**{busiest_count}편**의 영화가 이 구간에 있습니다.  \n"
+            f"🏆 가장 관객이 많은 영화는 **{top_movie_name}**으로, "
+            f"총 **{top_movie_audi:,}명**의 관객을 기록했습니다."
+        )
+
+    st.markdown("---")
+    st.markdown("### 이 그래프로 알 수 있는 것")
+    st.text_input(
+        "한 문장으로 작성해 보세요.",
+        placeholder="예: 영화의 총 관객 수가 특정 구간에 집중되어 있으며, 일부 영화는 매우 많은 관객을 기록한다.",
+        key="graph3_observation",
+    )
+else:
+    st.warning("총 관객 수 데이터를 확인할 수 없습니다.")
