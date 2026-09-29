@@ -514,3 +514,68 @@ if not sunburst_counts.empty:
     )
 else:
     st.warning("제작 국가와 장르 데이터를 확인할 수 없습니다.")
+
+
+# =========================================================
+# 그래프 8. 개봉일 상영횟수와 첫 주 관객의 관계
+# =========================================================
+st.subheader("8. 개봉일 상영횟수와 첫 주 관객의 관계")
+
+scatter8_df = df.copy()
+scatter8_df["first_show"] = pd.to_numeric(
+    scatter8_df["first_show"], errors="coerce"
+)
+scatter8_df["first_week_audi"] = pd.to_numeric(
+    scatter8_df["first_week_audi"], errors="coerce"
+)
+
+scatter8_df = scatter8_df.dropna(
+    subset=["first_show", "first_week_audi", "movieNm"]
+).copy()
+
+scatter8_df = scatter8_df[
+    (scatter8_df["first_show"] >= 0)
+    & (scatter8_df["first_week_audi"] >= 0)
+].copy()
+
+if not scatter8_df.empty:
+    fig8 = px.scatter(
+        scatter8_df,
+        x="first_show",
+        y="first_week_audi",
+        hover_name="movieNm",
+        labels={
+            "first_show": "개봉일 상영횟수",
+            "first_week_audi": "개봉 첫 주 관객 수",
+        },
+        title="개봉일 상영횟수와 개봉 첫 주 관객의 관계",
+    )
+
+    fig8.update_traces(
+        marker=dict(size=9, opacity=0.7),
+        hovertemplate=(
+            "영화명: %{hovertext}<br>"
+            "개봉일 상영횟수: %{x:,.0f}회<br>"
+            "개봉 첫 주 관객: %{y:,.0f}명"
+            "<extra></extra>"
+        ),
+    )
+
+    fig8.update_layout(
+        xaxis_title="개봉일 상영횟수(회)",
+        yaxis_title="개봉 첫 주 관객 수(명)",
+        margin=dict(t=70, b=60, l=20, r=20),
+        height=650,
+    )
+
+    st.plotly_chart(fig8, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("### 이 그래프로 알 수 있는 것")
+    st.text_input(
+        "한 문장으로 작성해 보세요.",
+        placeholder="예: 개봉일 상영횟수가 많은 영화일수록 첫 주 관객도 많은지 두 변수의 관계를 확인할 수 있다.",
+        key="graph8_observation",
+    )
+else:
+    st.warning("개봉일 상영횟수와 첫 주 관객 데이터를 확인할 수 없습니다.")
